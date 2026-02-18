@@ -1,8 +1,3 @@
-Gemini said
-A professional README.md is the face of your project. For Procura, it should clearly explain the 5-role workflow, the mathematical logic behind the predictions, and how to get the project running with the Neon/Prisma setup you've built.
-
-Copy and paste this into your README.md file:
-
 Procura — From Order to Production, Seamlessly.
 Procura (Latin: to manage/take care of) is a role-based inventory reorder prediction and cost variance analysis system designed for the manufacturing industry. It replaces fragmented email-based communication with a unified platform that tracks production from the initial sales order to final delivery.
 
