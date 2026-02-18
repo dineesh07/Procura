@@ -9,10 +9,11 @@ export default async function HomePage() {
   }
 
   // Redirect based on role
-  const role = session.user.role?.toLowerCase();
-  if (role) {
-    redirect(`/${role}`);
-  }
+  const role = session.user.role;
+  if (role === "SALES") redirect("/sales");
+  if (role?.includes("PPC")) redirect("/ppc");
+  if (role?.includes("MATERIALS")) redirect("/materials");
+  if (role === "PURCHASE") redirect("/purchase");
 
   return redirect("/login");
 }

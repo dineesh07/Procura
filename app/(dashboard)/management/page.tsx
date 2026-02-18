@@ -15,19 +15,36 @@ import {
 } from "recharts";
 
 export default function ManagementDashboard() {
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<any>({ totalOrders: 0, pendingOrders: 0, inProductionOrders: 0, totalVariance: 0, completedOrders: 0 });
     const [variances, setVariances] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function fetchData() {
-            const [statsRes, varRes] = await Promise.all([
-                fetch("/api/management/stats"),
-                fetch("/api/variance"),
-            ]);
-            setStats(await statsRes.json());
-            setVariances(await varRes.json());
-            setLoading(false);
+            try {
+                const [statsRes, varRes] = await Promise.all([
+                    fetch("/api/management/stats"),
+                    fetch("/api/variance"),
+                ]);
+                const statsData = await statsRes.json();
+                const varData = await varRes.json();
+
+                if (statsData && !statsData.error) {
+                    setStats(statsData);
+                } else {
+                    console.error("Stats API error:", statsData?.error);
+                }
+
+                if (Array.isArray(varData)) {
+                    setVariances(varData);
+                } else {
+                    console.error("Variance API error:", varData?.error);
+                }
+            } catch (error) {
+                console.error("Failed to fetch management dashboard data:", error);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchData();
     }, []);
@@ -72,7 +89,7 @@ export default function ManagementDashboard() {
                                 <YAxis />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                                    formatter={(value: number) => `₹${value.toLocaleString()}`}
+                                    formatter={(value: number | undefined) => `₹${(value ?? 0).toLocaleString()}`}
                                 />
                                 <Bar dataKey="planned" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Planned Cost" />
                                 <Bar dataKey="actual" fill="#ef4444" radius={[4, 4, 0, 0]} name="Actual Cost" />

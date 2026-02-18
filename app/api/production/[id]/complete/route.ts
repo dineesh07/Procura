@@ -10,7 +10,7 @@ export async function POST(
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const id = params.id;
+    const { id } = await params;
 
     try {
         const body = await req.json(); // { actuals: [{ itemName, actualQty, actualRate, plannedQty, plannedRate }] }
@@ -25,6 +25,25 @@ export async function POST(
         await prisma.$transaction(async (tx) => {
             // 1. Save Actual Consumption
             for (const item of body.actuals) {
+                // Fetch planned rate from BOM to ensure strict source of truth
+                const bomRecord = await tx.bOM.findUnique({
+                    where: {
+                        productName_itemName: {
+                            productName: production.order.productName,
+                            itemName: item.itemName,
+                        }
+                    }
+                });
+
+                if (!bomRecord) {
+                    throw new Error(`BOM record not found for product "${production.order.productName}" and item "${item.itemName}"`);
+                }
+
+                // @ts-ignore - plannedRate and unit are new in schema, dev server locking prisma client
+                const plannedRate = bomRecord.plannedRate;
+                // @ts-ignore
+                const plannedQty = item.plannedQty || (bomRecord.quantityPerUnit * production.order.quantity);
+
                 await tx.actualConsumption.create({
                     data: {
                         productionId: id,
@@ -36,9 +55,9 @@ export async function POST(
 
                 // 2. Calculate and Save Variance
                 const varResults = calculateVariance(
-                    item.plannedQty,
+                    plannedQty,
                     item.actualQty,
-                    item.plannedRate,
+                    plannedRate,
                     item.actualRate
                 );
 
@@ -46,9 +65,9 @@ export async function POST(
                     data: {
                         orderId: production.orderId,
                         itemName: item.itemName,
-                        plannedQty: item.plannedQty,
+                        plannedQty: plannedQty,
                         actualQty: item.actualQty,
-                        plannedRate: item.plannedRate,
+                        plannedRate: plannedRate,
                         actualRate: item.actualRate,
                         qtyVariance: varResults.qtyVariance,
                         priceVariance: varResults.priceVariance,

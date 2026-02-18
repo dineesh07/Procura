@@ -10,19 +10,30 @@ export default function PurchaseDashboard() {
 
     useEffect(() => {
         async function fetchData() {
-            const [reqRes, poRes] = await Promise.all([
-                fetch("/api/material-requests"),
-                fetch("/api/purchase-orders"),
-            ]);
-            const reqs = await reqRes.json();
-            const pos = await poRes.json();
+            try {
+                const [reqRes, poRes] = await Promise.all([
+                    fetch("/api/material-requests"),
+                    fetch("/api/purchase-orders"),
+                ]);
+                const reqs = await reqRes.json();
+                const pos = await poRes.json();
 
-            setStats({
-                pendingRequests: reqs.filter((r: any) => r.status === "PENDING").length,
-                activePOs: pos.filter((p: any) => p.status === "ORDERED").length,
-                delivered: pos.filter((p: any) => p.status === "RECEIVED").length,
-            });
-            setLoading(false);
+                const safeReqs = Array.isArray(reqs) ? reqs : [];
+                const safePos = Array.isArray(pos) ? pos : [];
+
+                if (!Array.isArray(reqs)) console.error("Requests API error:", reqs?.error);
+                if (!Array.isArray(pos)) console.error("POs API error:", pos?.error);
+
+                setStats({
+                    pendingRequests: safeReqs.filter((r: any) => r.status === "APPROVED").length,
+                    activePOs: safePos.filter((p: any) => p.status === "ORDERED").length,
+                    delivered: safePos.filter((p: any) => p.status === "RECEIVED").length,
+                });
+            } catch (error) {
+                console.error("Failed to fetch purchase dashboard data:", error);
+            } finally {
+                setLoading(false);
+            }
         }
         fetchData();
     }, []);

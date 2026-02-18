@@ -4,7 +4,8 @@ import { auth } from "@/lib/auth";
 
 export async function POST(req: Request) {
     const session = await auth();
-    if (!session || session.user.role !== "PPC") {
+    const userRole = session?.user?.role;
+    if (!session || !userRole?.includes("PPC")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

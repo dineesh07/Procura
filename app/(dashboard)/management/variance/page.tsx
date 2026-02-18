@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { TrendingDown, IndianRupee, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { toast } from "sonner";
 
 export default function VarianceReportPage() {
     const [variances, setVariances] = useState<any[]>([]);
@@ -12,8 +13,20 @@ export default function VarianceReportPage() {
         fetch("/api/variance")
             .then((res) => res.json())
             .then((data) => {
-                setVariances(data);
+                if (Array.isArray(data)) {
+                    setVariances(data);
+                } else {
+                    console.error("Failed to fetch variance data:", data.error);
+                    setVariances([]);
+                    toast.error(data.error || "Failed to load variance report");
+                }
                 setLoading(false);
+            })
+            .catch((err) => {
+                console.error("Network error:", err);
+                setVariances([]);
+                setLoading(false);
+                toast.error("Network error while fetching report");
             });
     }, []);
 

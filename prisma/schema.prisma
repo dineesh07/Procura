@@ -16,10 +16,11 @@ datasource db {
 
 enum Role {
   SALES
-  PPC
-  MATERIALS
+  PPC_MANAGER
+  PPC_EMPLOYEE
+  MATERIALS_MANAGER
+  MATERIALS_EMPLOYEE
   PURCHASE
-  MANAGEMENT
 }
 
 enum OrderStatus {
@@ -33,20 +34,32 @@ enum OrderStatus {
 
 enum RequestStatus {
   PENDING
+  VERIFIED_BY_STAFF
+  APPROVED
   ORDERED
   RECEIVED
 }
 
 model User {
-  id       String @id @default(cuid())
-  email    String @unique
-  password String
-  name     String
-  role     Role
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role
+  managerId String?  // For employees - points to their manager
+  createdAt DateTime @default(now())
+  
+  // Relations
+  manager   User?    @relation("ManagerEmployees", fields: [managerId], references: [id], onDelete: SetNull)
+  employees User[]   @relation("ManagerEmployees")
+  
+  assignedOrders         Order[]            @relation("AssignedPPCEmployee")
+  assignedMaterialReqs   MaterialRequest[]  @relation("AssignedMaterialsEmployee")
 }
 
 model Order {
   id               String            @id @default(cuid())
+  orderNumber      String            @unique @default(cuid()) // Ensure uniqueness
   customerName     String
   productName      String
   quantity         Int
@@ -54,6 +67,12 @@ model Order {
   status           OrderStatus       @default(PENDING)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  
+  // Task assignment for PPC team
+  assignedToId     String?           // PPC employee assigned to this order
+  assignedTo       User?             @relation("AssignedPPCEmployee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedAt       DateTime?         // When was it assigned
+
   materialRequests MaterialRequest[]
   production       Production?
   variances        Variance[]
@@ -64,6 +83,8 @@ model BOM {
   productName     String
   itemName        String
   quantityPerUnit Float
+  unit            String
+  plannedRate     Float
 
   @@unique([productName, itemName])
 }
@@ -82,11 +103,17 @@ model Inventory {
 
 model MaterialRequest {
   id              String                @id @default(cuid())
-  orderId         String
-  order           Order                 @relation(fields: [orderId], references: [id])
+  orderId         String?
+  order           Order?                @relation(fields: [orderId], references: [id])
   status          RequestStatus         @default(PENDING)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
+  
+  // Task assignment for Materials team
+  assignedToId    String?               // Materials employee assigned to this request
+  assignedTo      User?                 @relation("AssignedMaterialsEmployee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedAt      DateTime?             // When was it assigned
+
   items           MaterialRequestItem[]
   purchaseOrders  PurchaseOrder[]
 }
@@ -98,12 +125,17 @@ model MaterialRequestItem {
   itemName          String
   requiredQty       Float
   shortageQty       Float
+  actualPhysicalCount Float?        // Added for employee verification
+  status            RequestStatus   @default(PENDING) // Added for line-item tracking
+  purchaseOrders    PurchaseOrder[]
 }
 
 model PurchaseOrder {
   id                String          @id @default(cuid())
-  materialRequestId String
-  materialRequest   MaterialRequest @relation(fields: [materialRequestId], references: [id])
+  materialRequestId String?         // Changed to optional
+  materialRequest   MaterialRequest? @relation(fields: [materialRequestId], references: [id])
+  materialRequestItemId String       // Changed to required
+  materialRequestItem   MaterialRequestItem @relation(fields: [materialRequestItemId], references: [id])
   itemName          String
   quantity          Float
   rate              Float

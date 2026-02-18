@@ -12,8 +12,19 @@ export async function GET() {
 
         const alerts = inventory
             .map((item) => {
-                const { days, status } = calculateDaysRemaining(item.currentStock, item.dailyConsumption);
-                return { ...item, daysRemaining: days, alertStatus: status };
+                const result = calculateDaysRemaining(item.currentStock, item.dailyConsumption);
+                const { days, status } = typeof result === "number" ? { days: result, status: "HEALTHY" as const } : result;
+                const predictedReorderLevel = (item.dailyConsumption * item.leadTime) + item.safetyStock;
+
+                // Use the formula for status check
+                const alertStatus = (item.currentStock < predictedReorderLevel) ? "CRITICAL" : status;
+
+                return {
+                    ...item,
+                    daysRemaining: days,
+                    alertStatus: alertStatus,
+                    predictedLevel: predictedReorderLevel
+                };
             })
             .filter((item) => item.alertStatus !== "HEALTHY" || item.currentStock < item.reorderLevel);
 

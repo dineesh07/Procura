@@ -9,7 +9,7 @@ export async function PUT(
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const id = params.id;
+    const { id } = await params;
 
     try {
         const po = await prisma.purchaseOrder.findUnique({
@@ -23,29 +23,55 @@ export async function PUT(
         if (po.status === "RECEIVED") return NextResponse.json({ error: "Already received" }, { status: 400 });
 
         // Use transaction to ensure data consistency
-        await prisma.$transaction([
+        const result = await prisma.$transaction(async (tx) => {
             // 1. Mark PO as received
-            prisma.purchaseOrder.update({
+            const updatedPo = await tx.purchaseOrder.update({
                 where: { id },
                 data: { status: "RECEIVED" },
-            }),
-            // 2. Mark Material Request as received
-            prisma.materialRequest.update({
-                where: { id: po.materialRequestId },
-                data: { status: "RECEIVED" },
-            }),
-            // 3. Update Inventory (increase stock)
-            // Note: In a real system, we'd lookup item by BOM or some mapping.
-            // For this demo, let's assume we know the item name from the PO (added to model below if needed, or derived).
-            // Let's assume the PurchaseOrder model could use an itemName field.
-            // Actually, my prisma model didn't have itemName in PurchaseOrder.
-            // I'll update the model later if needed, but for now I'll assume we can find it.
-            // To keep it simple for the blueprint, I'll update the Inventory by matching supplier/info or just placeholder for now.
-        ]);
+            });
 
-        // Re-calculating inventory requires item name.
-        // I should have included itemName in PurchaseOrder or linked it better.
-        // I'll add itemName to PurchaseOrder model in a moment.
+            // 2. Update the specific MaterialRequestItem status
+            if (po.materialRequestItemId) {
+                await tx.materialRequestItem.update({
+                    where: { id: po.materialRequestItemId },
+                    data: { status: "RECEIVED" } as any, // Cast in case types are lagging
+                });
+            }
+
+            // 3. Update Inventory (increase stock)
+            const inventory = await tx.inventory.findUnique({
+                where: { itemName: po.itemName }
+            });
+
+            if (inventory) {
+                await tx.inventory.update({
+                    where: { id: inventory.id },
+                    data: {
+                        currentStock: inventory.currentStock + po.quantity,
+                        onOrderStock: Math.max(0, inventory.onOrderStock - po.quantity) // Reduce on-order stock
+                    },
+                });
+            }
+
+            // 4. Check if all items in the parent request are now received
+            const allItems = await tx.materialRequestItem.findMany({
+                where: { materialRequestId: (po.materialRequestId || "") as string },
+            });
+
+            const allReceived = allItems.every((item: any) => item.status === "RECEIVED");
+
+            // 5. Update parent request status only if all items are done
+            if (allReceived && po.materialRequestId) {
+                await tx.materialRequest.update({
+                    where: { id: po.materialRequestId },
+                    data: { status: "RECEIVED" },
+                });
+            }
+
+            return updatedPo;
+        });
+
+        return NextResponse.json({ message: "Stock received and inventory updated", po: result });
 
         return NextResponse.json({ message: "PO received and inventory updated" });
     } catch (error) {

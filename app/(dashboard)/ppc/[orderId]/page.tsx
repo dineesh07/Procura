@@ -21,7 +21,8 @@ export default async function PPCOrderCalculationPage({
     params: { orderId: string };
 }) {
     const session = await auth();
-    if (!session || session.user.role !== "PPC") {
+    const userRole = session?.user?.role;
+    if (!session || !userRole?.includes("PPC")) {
         redirect("/login");
     }
 
@@ -77,28 +78,56 @@ export default async function PPCOrderCalculationPage({
                 </div>
                 <div className="p-6 space-y-6">
                     <div className="grid gap-6 md:grid-cols-2">
-                        {requirements.map((req) => (
-                            <div key={req.material} className="space-y-2">
-                                <div className="flex justify-between items-end">
-                                    <div>
-                                        <p className="font-medium text-sm">{req.material}</p>
-                                        <p className="text-xs text-slate-500">
-                                            Req: {req.required} | Stock: {req.physicalStock} | Available: {req.softAvailable}
-                                        </p>
+                        {requirements.map((req) => {
+                            const projectedStock = req.physicalStock - req.required;
+                            const isReorderTriggered = projectedStock < (req.physicalStock * 0.2); // Simple heuristic for visual demo
+
+                            return (
+                                <div key={req.material} className="p-4 border rounded-xl bg-slate-50/30 hover:bg-white hover:shadow-md transition-all group">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <p className="font-bold text-slate-800 tracking-tight">{req.material}</p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                    Current: {req.physicalStock}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    Usage: {req.required}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">Projected Balance</p>
+                                            <p className={`text-sm font-mono font-black ${projectedStock < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                {projectedStock > 0 ? "+" : ""}{projectedStock}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <span className={`text-xs font-bold ${req.shortage > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                        {req.shortage > 0 ? `Shortage: ${req.shortage}` : 'Stock Sufficient'}
-                                    </span>
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between text-[10px] items-center">
+                                            <span className="text-slate-500 font-medium">BOM Utilization</span>
+                                            <span className={`font-black ${req.utilizationPercent > 90 ? 'text-red-600' : 'text-slate-700'}`}>
+                                                {Math.round(req.utilizationPercent)}%
+                                            </span>
+                                        </div>
+                                        <Progress
+                                            value={Math.min(100, req.utilizationPercent)}
+                                            className={`h-1.5 ${req.utilizationPercent > 80 ? 'bg-red-100' : ''}`}
+                                        />
+                                    </div>
+
+                                    {projectedStock < 0 && (
+                                        <div className="mt-3 bg-red-50 border border-red-100 rounded p-2 flex items-center gap-2 animate-pulse">
+                                            <AlertTriangle className="w-3 h-3 text-red-600" />
+                                            <span className="text-[9px] text-red-700 font-bold uppercase tracking-tight">
+                                                Will Trigger Immediate Reorder alert
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                                <Progress
-                                    value={Math.min(100, req.utilizationPercent)}
-                                    className={`h-2 ${req.utilizationPercent > 80 ? 'bg-red-100' : ''}`}
-                                />
-                                <p className="text-[10px] text-right text-slate-400">
-                                    {Math.round(req.utilizationPercent)}% of physical stock utilized
-                                </p>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     <div className={`p-4 rounded-lg border flex items-start gap-4 ${totalShortages > 0 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-green-50 border-green-200 text-green-900'}`}>
@@ -128,20 +157,29 @@ export default async function PPCOrderCalculationPage({
                     <div className="flex justify-end gap-3 pt-4 border-t">
                         <form action={async () => {
                             "use server"
-                            const payload = {
-                                orderId: order.id,
-                                items: requirements.map(r => ({
-                                    material: r.material,
-                                    required: r.required,
-                                    shortage: r.shortage
-                                }))
-                            };
 
-                            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-                            await fetch(`${baseUrl}/api/material-requests`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify(payload)
+                            // Only request items that have a real shortage
+                            const shortageItems = requirements.filter(r => r.shortage > 0);
+
+                            // Create Material Request directly in DB to avoid port conflicts
+                            await prisma.materialRequest.create({
+                                data: {
+                                    orderId: order.id,
+                                    status: "PENDING",
+                                    items: {
+                                        create: shortageItems.map(r => ({
+                                            itemName: r.material,
+                                            requiredQty: r.required,
+                                            shortageQty: r.shortage,
+                                        })),
+                                    },
+                                },
+                            });
+
+                            // Update order status
+                            await prisma.order.update({
+                                where: { id: order.id },
+                                data: { status: "MATERIAL_REQUESTED" },
                             });
 
                             redirect("/ppc");

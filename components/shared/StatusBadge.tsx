@@ -14,7 +14,11 @@ export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
             case "IN_PRODUCTION":
                 return "bg-orange-100 text-orange-800 border-orange-200";
             case "COMPLETED":
+            case "APPROVED":
+            case "RECEIVED":
                 return "bg-green-100 text-green-800 border-green-200";
+            case "VERIFIED_BY_STAFF":
+                return "bg-purple-100 text-purple-800 border-purple-200";
             case "CANCELLED":
                 return "bg-gray-100 text-gray-800 border-gray-200";
             case "CRITICAL":

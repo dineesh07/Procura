@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ShoppingCart, Clock, CheckCircle2, History } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function SalesDashboard() {
     const [orders, setOrders] = useState<any[]>([]);
@@ -15,8 +16,20 @@ export default function SalesDashboard() {
         fetch("/api/orders")
             .then((res) => res.json())
             .then((data) => {
-                setOrders(data);
+                if (Array.isArray(data)) {
+                    setOrders(data);
+                } else {
+                    console.error("Failed to fetch orders:", data.error);
+                    setOrders([]);
+                    toast.error(data.error || "Failed to load orders");
+                }
                 setLoading(false);
+            })
+            .catch((err) => {
+                console.error("Network error:", err);
+                setOrders([]);
+                setLoading(false);
+                toast.error("Network error while fetching orders");
             });
     }, []);
 

@@ -29,12 +29,25 @@ export default function ActualConsumptionPage() {
                 const bomData = await bomRes.json();
                 setBom(bomData);
 
-                // Initialize actuals with planned values for convenience
+                // Initialize actuals with the most accurate "Actual" data available
                 const initial: any = {};
                 bomData.forEach((item: any) => {
+                    // Try to find if we bought this item specifically for this order
+                    let actualPurchaseRate = item.plannedRate;
+
+                    if (current.order.materialRequests) {
+                        for (const req of current.order.materialRequests) {
+                            const po = req.purchaseOrders?.find((p: any) => p.itemName === item.itemName);
+                            if (po) {
+                                actualPurchaseRate = po.rate;
+                                break;
+                            }
+                        }
+                    }
+
                     initial[item.itemName] = {
                         qty: (item.quantityPerUnit * current.order.quantity).toString(),
-                        rate: "100", // Default planned rate (could be fetched)
+                        rate: (actualPurchaseRate || 100).toString(),
                     };
                 });
                 setActuals(initial);
@@ -50,10 +63,10 @@ export default function ActualConsumptionPage() {
             const payload = {
                 actuals: bom.map(item => ({
                     itemName: item.itemName,
-                    actualQty: actuals[item.itemName].qty,
-                    actualRate: actuals[item.itemName].rate,
+                    actualQty: parseFloat(actuals[item.itemName].qty),
+                    actualRate: parseFloat(actuals[item.itemName].rate),
                     plannedQty: item.quantityPerUnit * production.order.quantity,
-                    plannedRate: 100, // Matching the default above
+                    plannedRate: item.plannedRate || 100,
                 }))
             };
 

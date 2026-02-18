@@ -34,7 +34,17 @@ export async function GET() {
 
     try {
         const productions = await prisma.production.findMany({
-            include: { order: true },
+            include: {
+                order: {
+                    include: {
+                        materialRequests: {
+                            include: {
+                                purchaseOrders: true
+                            }
+                        }
+                    }
+                }
+            },
             orderBy: { startedAt: "desc" },
         });
         return NextResponse.json(productions);

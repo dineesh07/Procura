@@ -4,28 +4,21 @@ import { prisma } from "./prisma";
  * Calculates the current "Soft Available" stock for a material.
  * Soft Available = Physical Stock - Allocated (Sum of PENDING material requests)
  */
-export async function getSoftAvailableStock(itemName: string) {
+export async function getSoftAvailableStock(itemName: string, excludeOrderId?: string) {
     const inventory = await prisma.inventory.findUnique({
         where: { itemName },
     });
 
     if (!inventory) return 0;
 
-    const pendingRequests = await prisma.materialRequest.findMany({
-        where: {
-            status: "PENDING",
-            // We'd ideally link MaterialRequest to specific Items, 
-            // but in this version it's per Order. 
-            // For now, we fetch all orders that are CALCULATING or MATERIAL_REQUESTED
-            // to estimate allocation.
-        }
-    });
-
-    // In a more robust system, MaterialRequest would have line items.
-    // For this implementation, we'll calculate allocation based on BOM of PENDING orders.
+    // We only care about orders that are ALREADY in the pipeline (CALCULATING/REQUESTED)
+    // but we must exclude the current order being calculated to avoid self-allocation
     const pendingOrders = await prisma.order.findMany({
         where: {
-            status: { in: ["CALCULATING", "MATERIAL_REQUESTED"] }
+            status: { in: ["CALCULATING", "MATERIAL_REQUESTED"] },
+            ...(excludeOrderId && {
+                id: { not: excludeOrderId }
+            })
         }
     });
 
@@ -42,7 +35,7 @@ export async function getSoftAvailableStock(itemName: string) {
         }
     }
 
-    return Math.max(0, inventory.currentStock - allocatedAmount);
+    return inventory.currentStock - allocatedAmount;
 }
 
 /**
@@ -66,14 +59,34 @@ export async function calculateOrderRequirements(orderId: string) {
         });
 
         const physicalStock = inventory?.currentStock || 0;
-        const softAvailable = await getSoftAvailableStock(item.itemName);
+
+        // Pass order.id to exclude THIS order from allocation check
+        const softAvailable = await getSoftAvailableStock(item.itemName, order.id);
+
+        // User Defined Logic: Reorder Shortage Calculation
+        // Reorder Level = (Daily Consumption * Lead Time) + Safety Stock
+        // Shortage = Max(0, Reorder Level - Current Stock)
+
+        const dailyConsumption = inventory?.dailyConsumption || 0;
+        const leadTime = inventory?.leadTime || 0;
+        const safetyStock = inventory?.safetyStock || 0;
+
+        const reorderLevel = (dailyConsumption * leadTime) + safetyStock;
+        const reorderShortage = Math.max(0, reorderLevel - physicalStock);
+
+        // PPC Logic: Shortage for specific order
+        const orderShortage = Math.max(0, required - softAvailable);
 
         return {
             material: item.itemName,
-            required,
+            required, // Planned Qty for this order
             physicalStock,
             softAvailable,
-            shortage: Math.max(0, required - softAvailable),
+
+            // Distinguish the two shortage types
+            shortage: orderShortage, // Default binding for PPC Dashboard (Kavya)
+            reorderShortage,         // For future Materials Manager views
+
             utilizationPercent: physicalStock > 0 ? (required / physicalStock) * 100 : 100
         };
     }));

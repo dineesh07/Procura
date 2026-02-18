@@ -22,25 +22,39 @@ interface SidebarProps {
 const roleMenus: Record<string, any[]> = {
     SALES: [
         { label: "Dashboard", href: "/sales", icon: LayoutDashboard },
-        { label: "New Order", href: "/sales/new", icon: ShoppingCart },
+        { label: "Orders", href: "/sales/orders", icon: ShoppingCart },
+        { label: "New Order", href: "/sales/new", icon: LayoutDashboard }, // Using LayoutDashboard for now if ShoppingCart is used
     ],
-    PPC: [
-        { label: "Orders", href: "/ppc", icon: LayoutDashboard },
+    PPC_MANAGER: [
+        { label: "Dashboard", href: "/ppc", icon: LayoutDashboard },
+        { label: "All Orders", href: "/ppc/orders", icon: ShoppingCart },
+        { label: "Production", href: "/ppc/production", icon: Calculator },
+        { label: "Variance Reports", href: "/ppc/variance", icon: TrendingDown },
+        { label: "Team", href: "/ppc/team", icon: Package },
+    ],
+    PPC_EMPLOYEE: [
+        { label: "Dashboard", href: "/ppc", icon: LayoutDashboard },
+        { label: "My Tasks", href: "/ppc/my-tasks", icon: ShoppingCart },
         { label: "Production", href: "/ppc/production", icon: Calculator },
     ],
-    MATERIALS: [
-        { label: "Inventory", href: "/materials", icon: Package },
-        { label: "Requests", href: "/materials/requests", icon: Truck },
+    MATERIALS_MANAGER: [
+        { label: "Dashboard", href: "/materials", icon: LayoutDashboard },
+        { label: "All Requests", href: "/materials/requests", icon: Truck },
+        { label: "Inventory", href: "/materials/inventory", icon: Package },
+        { label: "Alerts", href: "/materials/alerts", icon: AlertTriangle },
+        { label: "Variance Reports", href: "/materials/variance", icon: TrendingDown },
+        { label: "Team", href: "/materials/team", icon: Package },
+    ],
+    MATERIALS_EMPLOYEE: [
+        { label: "Dashboard", href: "/materials", icon: LayoutDashboard },
+        { label: "My Tasks", href: "/materials/my-tasks", icon: ShoppingCart },
+        { label: "Inventory", href: "/materials/inventory", icon: Package },
         { label: "Alerts", href: "/materials/alerts", icon: AlertTriangle },
     ],
     PURCHASE: [
         { label: "Dashboard", href: "/purchase", icon: LayoutDashboard },
+        { label: "Requests", href: "/purchase/requests", icon: Truck },
         { label: "Orders", href: "/purchase/orders", icon: History },
-    ],
-    MANAGEMENT: [
-        { label: "KPIs", href: "/management", icon: BarChart3 },
-        { label: "Variance", href: "/management/variance", icon: TrendingDown },
-        { label: "Stock", href: "/management/stock", icon: Package },
     ],
 };
 
