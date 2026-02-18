@@ -1,0 +1,148 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SALES
+  PPC
+  MATERIALS
+  PURCHASE
+  MANAGEMENT
+}
+
+enum OrderStatus {
+  PENDING
+  CALCULATING
+  MATERIAL_REQUESTED
+  IN_PRODUCTION
+  COMPLETED
+  CANCELLED
+}
+
+enum RequestStatus {
+  PENDING
+  ORDERED
+  RECEIVED
+}
+
+model User {
+  id       String @id @default(cuid())
+  email    String @unique
+  password String
+  name     String
+  role     Role
+}
+
+model Order {
+  id               String            @id @default(cuid())
+  customerName     String
+  productName      String
+  quantity         Int
+  deliveryDate     DateTime
+  status           OrderStatus       @default(PENDING)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  materialRequests MaterialRequest[]
+  production       Production?
+  variances        Variance[]
+}
+
+model BOM {
+  id              String @id @default(cuid())
+  productName     String
+  itemName        String
+  quantityPerUnit Float
+
+  @@unique([productName, itemName])
+}
+
+model Inventory {
+  id               String @id @default(cuid())
+  itemName         String @unique
+  currentStock     Float  @default(0)
+  onOrderStock     Float  @default(0)
+  reorderLevel     Float
+  dailyConsumption Float
+  leadTime         Int
+  safetyStock      Float
+  unit             String
+}
+
+model MaterialRequest {
+  id              String                @id @default(cuid())
+  orderId         String
+  order           Order                 @relation(fields: [orderId], references: [id])
+  status          RequestStatus         @default(PENDING)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  items           MaterialRequestItem[]
+  purchaseOrders  PurchaseOrder[]
+}
+
+model MaterialRequestItem {
+  id                String          @id @default(cuid())
+  materialRequestId String
+  materialRequest   MaterialRequest @relation(fields: [materialRequestId], references: [id])
+  itemName          String
+  requiredQty       Float
+  shortageQty       Float
+}
+
+model PurchaseOrder {
+  id                String          @id @default(cuid())
+  materialRequestId String
+  materialRequest   MaterialRequest @relation(fields: [materialRequestId], references: [id])
+  itemName          String
+  quantity          Float
+  rate              Float
+  supplierName      String
+  expectedDate      DateTime
+  status            RequestStatus   @default(PENDING)
+  createdAt         DateTime        @default(now())
+}
+
+model Production {
+  id                String              @id @default(cuid())
+  orderId           String              @unique
+  order             Order               @relation(fields: [orderId], references: [id])
+  status            OrderStatus         @default(PENDING)
+  startedAt         DateTime?
+  completedAt       DateTime?
+  actualConsumption ActualConsumption[]
+}
+
+model ActualConsumption {
+  id           String     @id @default(cuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id])
+  itemName     String
+  actualQty    Float
+  actualRate   Float
+}
+
+model Variance {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id])
+  itemName       String
+  plannedQty     Float
+  actualQty      Float
+  plannedRate    Float
+  actualRate     Float
+  qtyVariance    Float
+  priceVariance  Float
+  totalVariance  Float
+  createdAt      DateTime @default(now())
+}
